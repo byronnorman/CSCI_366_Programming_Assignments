@@ -26,12 +26,12 @@
  * @return length of the file in bytes
  */
 int get_file_length(ifstream *file){
+    file
 }
 
 
-void Server::initialize(unsigned int board_size,
-                        string p1_setup_board,
-                        string p2_setup_board){
+void Server::initialize(unsigned int board_size, string p1_setup_board, string p2_setup_board){
+
 }
 
 
