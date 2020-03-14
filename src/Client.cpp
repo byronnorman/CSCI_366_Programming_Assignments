@@ -17,10 +17,10 @@
 #include "common.hpp"
 #include "Client.hpp"
 #include <iostream>
+#include <cereal/types/vector.hpp>
 #include <cereal/archives/json.hpp>
-#include <fstream>
 
-//To-do handle exceptions
+
 Client::~Client() {
     board_name = "player_" + std::to_string(player) + ".action_board.json";
     remove(board_name.c_str());
@@ -29,27 +29,29 @@ Client::~Client() {
 void Client::initialize(unsigned int player, unsigned int board_size){
     this->player = player;
     this->board_size = board_size;
-    std::string blank = "_";
+    vector< vector<int> > board;
+    vector<int> temp_vec;
     ofstream action_board("player_" + std::to_string(player) + ".action_board.json");
     cereal::JSONOutputArchive archive( action_board );
 
-    for (int i = 0; i < board_size; i++) {
-        for (int j = 0; j < board_size; j++) {
-            archive( cereal::make_nvp(std::to_string(i) + std::to_string(j), blank) );
-        }
+    for (int x = 0; x < board_size; x++) {
+        temp_vec.push_back(0);
+    }
+    for (int x = 0; x < board_size; x++) {
+        board.push_back(temp_vec);
     }
 
-    action_board.close();
+    archive( CEREAL_NVP(board) );
+
     initialized = true;
 }
 
 
 void Client::fire(unsigned int x, unsigned int y) {
     ofstream file_name("player_" + std::to_string(player) + ".shot.json");
-    std::string shot = std::to_string(x) + ", " + std::to_string(y);
     cereal::JSONOutputArchive archive( file_name );
 
-    archive(CEREAL_NVP(shot));
+    archive( cereal::make_nvp("x", x), cereal::make_nvp("y", y) );
 }
 
 
@@ -60,52 +62,64 @@ bool Client::result_available() {
 
 
 int Client::get_result() {
-    ifstream file("player_" + std::to_string(player) + ".result.json");
+    string file_name = "player_" + std::to_string(player) + ".result.json";
+    ifstream file(file_name);
     cereal::JSONInputArchive archive(file);
     int result;
 
     archive(result);
 
-    if (result == 0) {
-        return MISS;
+    if (result != HIT && result != MISS && result != OUT_OF_BOUNDS){
+        throw( ClientException("Unexpected result received.") );
     }
-    else if (result == 1){
-        return HIT;
-    }
-    else {
-        return OUT_OF_BOUNDS;
-    }
+
+    remove(file_name.c_str());
+
+    return result;
+
 }
 
 
 
 void Client::update_action_board(int result, unsigned int x, unsigned int y) {
-    ofstream action_board("player_" + std::to_string(player) + ".action_board.json");
-    cereal::JSONOutputArchive archive( action_board );
+    ifstream file("player_" + std::to_string(player) + ".action_board.json");
+    cereal::JSONInputArchive read_action_board(file);
+    vector< vector<int> > board;
+
+    read_action_board(board);
 
     if (result == HIT) {
-        archive( cereal::make_nvp(std::to_string(x) + std::to_string(y), "H") );
+        board[x][y] = 1;
+    } else if (result == MISS) {
+        board[x][y] = -1;
     }
-    else {
-        archive( cereal::make_nvp(std::to_string(x) + std::to_string(y), "M") );
-    }
-}
 
+    ofstream action_board("player_" + std::to_string(player) + ".action_board.json");
+    cereal::JSONOutputArchive archive(action_board);
+
+    archive(CEREAL_NVP(board));
+}
 
 string Client::render_action_board(){
     ifstream file("player_" + std::to_string(player) + ".action_board.json");
-    cereal::JSONInputArchive archive(file);
-    string board_lines [board_size];
-    string board;
+    cereal::JSONInputArchive read_action_board(file);
+    vector< vector<int> > board;
+    string board_lines[board_size];
+    string string_board;
+
+    read_action_board( board );
 
     for(int i = 0; i < board_size; i++){
         for(int j = 0; j < board_size; j++){
-            string s;
-            archive( cereal::make_nvp(std::to_string(i) + std::to_string(j), s) );
-            board_lines[i].append(s);
+            switch (board[j][i]) {
+                case 0 : board_lines[i].append("0"); break;
+                case 1 : board_lines[i].append("H"); break;
+                case -1 : board_lines[i].append("M"); break;
+                default : break;
+            }
         }
-        board.append(board_lines[i] + "\n");
+        string_board.append(board_lines[i] + "\n");
     }
 
-    return board;
+    return string_board;
 }
